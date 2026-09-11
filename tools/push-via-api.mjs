@@ -15,8 +15,7 @@
  * - 远端存在但本地没有的文件会被删除，保持仓库与本地一致
  */
 
-import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFileSync, execSync } from 'node:child_process';
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
@@ -73,10 +72,15 @@ if (files.length === 0) {
 }
 console.log(`待推送文件：${files.length} 个 -> ${repoSlug}#${branch}`);
 
+/** 读取 git 索引中的内容（保持仓库内的换行符规范，不受 core.autocrlf 影响） */
+function readIndexed(filePath) {
+  return execFileSync('git', ['cat-file', 'blob', `:${filePath}`], { maxBuffer: 64 * 1024 * 1024 });
+}
+
 async function createBlobs() {
   const result = [];
   for (const filePath of files) {
-    const content = readFileSync(filePath).toString('base64');
+    const content = readIndexed(filePath).toString('base64');
     const blob = await api('POST', `/repos/${owner}/${repo}/git/blobs`, { content, encoding: 'base64' });
     result.push({ path: filePath, mode: '100644', type: 'blob', sha: blob.sha });
     console.log(`  blob ${filePath}`);
@@ -88,7 +92,7 @@ async function createBlobs() {
 async function bootstrapEmptyRepo() {
   let content;
   try {
-    content = readFileSync('README.md').toString('base64');
+    content = readIndexed('README.md').toString('base64');
   } catch {
     content = Buffer.from('# init\n').toString('base64');
   }

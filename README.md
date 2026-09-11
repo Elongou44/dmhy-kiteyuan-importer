@@ -188,6 +188,7 @@ node tools/mcp-probe.mjs --token <你的 MCP Token> --call storage_get_status
 - **用户脚本仓库**：脚本头 `@namespace` / `@author` 目前指向 `github.com/Elongou44/dmhy-kiteyuan-importer`，换成你的实际仓库地址即可
 - **Greasy Fork**：直接提交 `dmhy-kiteyuan.user.js`（`@name` / `@description` / `@license` / `@match` / `@connect` 均已就绪，脚本零依赖）
 - **CI**：`.github/workflows/test.yml` 会在 push / PR 时运行 43 项端到端断言，不需要任何凭据
+- **`tools/push-via-api.mjs`**：本地开发辅助工具。当 `github.com` 的 git 传输被重置、或 git 被配置成走只读镜像（gh-proxy 之类）导致 `git push` 失败时，可用它通过 GitHub API 推送提交（凭据取自 `gh auth token`，只发往 `api.github.com`）
 
 发布前自检：
 
