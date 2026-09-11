@@ -1,0 +1,12 @@
+{
+  "name": "dmhy-kiteyuan-importer-test",
+  "private": true,
+  "type": "module",
+  "description": "端到端测试（jsdom 中执行真实用户脚本 + Mock MCP 服务端）",
+  "scripts": {
+    "test": "node e2e.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}

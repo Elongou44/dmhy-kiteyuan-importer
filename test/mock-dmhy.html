@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Mock 动漫花园列表页（离线调试用）</title>
+<style>
+  body { font-family: "Microsoft YaHei", Arial, sans-serif; margin: 24px; color: #333; }
+  .tip { background: #eef6ff; border: 1px solid #b6d6f5; padding: 10px 14px; border-radius: 4px; line-height: 1.7; }
+  .tip code { background: #fff; padding: 1px 5px; border: 1px solid #d0d7de; border-radius: 3px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 13px; vertical-align: middle; }
+  th { background: #f5f5f5; }
+  td.action { white-space: nowrap; }
+  a.download-arrow { display: inline-block; padding: 1px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px; text-decoration: none; color: #555; }
+</style>
+</head>
+<body>
+  <div class="tip">
+    <b>Mock 动漫花园列表页</b>（与真实 dmhy 的 <code>#topic_list</code> 结构一致，仅用于离线联调）<br>
+    1. 启动 Mock MCP：<code>node tools/mock-mcp-server.mjs</code>（默认 8787 端口）<br>
+    2. 在本页打开脚本菜单 →「设置 MCP Endpoint」→ 填 <code>http://127.0.0.1:8787/api/v1/mcp</code><br>
+    3. 点击任意「纸鸢转存」按钮 → 按提示填写 MCP Token（Mock 环境填任意非空值即可），Token 只保存在本机<br>
+    4. 观察按钮状态与右下角提示
+  </div>
+
+  <table id="topic_list" class="topic_list">
+    <thead>
+      <tr><th>分类</th><th>标题</th><th>下载</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
+        <td class="title"><a href="/topics/view/900001_porco-rosso.html">[红猪] Porco Rosso [BDRip 1080p HEVC]</a></td>
+        <td class="action">
+          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:1111111111111111111111111111111111111111&amp;dn=Porco%20Rosso" title="磁力链接">磁力</a>
+          <a class="download-arrow arrow-down" href="/topics/download/900001" title="下载种子">种子</a>
+        </td>
+      </tr>
+      <tr>
+        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
+        <td class="title"><a href="/topics/view/900002_porco-rosso.html">[红猪] Porco Rosso [1080p][简繁外挂]</a></td>
+        <td class="action">
+          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:2222222222222222222222222222222222222222&amp;dn=Porco%20Rosso%20CHT" title="磁力链接">磁力</a>
+          <a class="download-arrow arrow-down" href="/topics/download/900002" title="下载种子">种子</a>
+        </td>
+      </tr>
+      <tr>
+        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
+        <td class="title"><a href="/topics/view/900003_porco-rosso.html">[红猪] Porco Rosso [720p][仅种子无磁力]</a></td>
+        <td class="action">
+          <a class="download-arrow arrow-down" href="/topics/download/900003" title="下载种子">种子</a>
+        </td>
+      </tr>
+      <tr>
+        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
+        <td class="title"><a href="/topics/view/900004_porco-rosso.html">[红猪] Porco Rosso [BDRip 2160p]</a></td>
+        <td class="action">
+          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:4444444444444444444444444444444444444444&amp;dn=Porco%20Rosso%204K" title="磁力链接">磁力</a>
+        </td>
+      </tr>
+      <tr>
+        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
+        <td class="title"><a href="/topics/view/900005_porco-rosso.html">[红猪] Porco Rosso [与第 1 行相同磁力，用于测试重复转存]</a></td>
+        <td class="action">
+          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:1111111111111111111111111111111111111111&amp;dn=Porco%20Rosso%20dup" title="磁力链接">磁力</a>
+        </td>
+      </tr>
+      <tr>
+        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
+        <td class="title"><a href="/topics/view/313647_1080P_BD-MKV.html">[Kamigami] 红猪 / Kurenai no Buta [BD 1080p]（Base32 磁力 + 长 tracker 列表）</a></td>
+        <td class="action">
+          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:IBDFG6XQ35NHBMXXU46LB2RHATX6ZUVO&amp;dn=%5BKamigami%5D+Kurenai+no+Buta+Porco+Rosso+1992+%5BBD+x264+1920_1080%5D.mkv&amp;tr=http%3A%2F%2F208.67.16.113%3A8000%2Fannounce&amp;tr=udp%3A%2F%2F208.67.16.113%3A8000%2Fannounce&amp;tr=http%3A%2F%2Ftracker.openbittorrent.com%3A80%2Fannounce&amp;tr=http%3A%2F%2Ftracker.ktxp.com%3A6868%2Fannounce" title="磁力链接">磁力</a>
+          <a class="download-arrow arrow-down" href="/topics/download/313647" title="下载种子">种子</a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>
