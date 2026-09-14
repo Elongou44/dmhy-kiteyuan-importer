@@ -1,3 +1,7 @@
 node_modules/
 test/node_modules/
 *.log
+
+# 本地凭据与下载配置（不要提交）
+.mybt-mcp-token
+.mybt-download.json
