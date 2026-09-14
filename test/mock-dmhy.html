@@ -3,75 +3,168 @@
 <head>
 <meta charset="utf-8">
 <title>Mock 动漫花园列表页（离线调试用）</title>
+<!--
+  与真实 dmhy（share.dmhy.org/topics/list）同构的离线调试页。
+
+  为什么必须同构：真实页面的「磁鏈」列宽由表头 width="10%" 固定，配合
+  table.tablesorter{table-layout:fixed} 与 td{overflow:hidden}，列宽完全不受内容影响，
+  且该列是 nowrap。该列内原有三个元素（磁力图标 / 迅雷 / PikPak）已几乎占满列宽，
+  因此脚本的按钮必须挂在「標題」列（td.title，唯一既宽又允许换行的列）末尾。
+  早期版本的 mock 把磁力和种子图标放进同一个 td.action 格子里，结构错误，
+  导致「按钮挤掉原列元素」这类布局缺陷无法被测试发现。
+
+  尺寸说明（下列数值来自真实页面实测，用于在无外链资源时保持布局一致）：
+    - 迅雷按钮：真实为 <img src="/xl1.png?2" style="height:20px;width:auto">，
+      xl1.png 为 1172x284，按高 20px 等比渲染约 82px 宽，这里用等宽占位。
+    - PikPak 按钮：真实渲染宽约 80px，这里用等宽占位。
+-->
 <style>
   body { font-family: "Microsoft YaHei", Arial, sans-serif; margin: 24px; color: #333; }
   .tip { background: #eef6ff; border: 1px solid #b6d6f5; padding: 10px 14px; border-radius: 4px; line-height: 1.7; }
   .tip code { background: #fff; padding: 1px 5px; border: 1px solid #d0d7de; border-radius: 3px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 13px; vertical-align: middle; }
-  th { background: #f5f5f5; }
-  td.action { white-space: nowrap; }
-  a.download-arrow { display: inline-block; padding: 1px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px; text-decoration: none; color: #555; }
+
+  /* ↓↓↓ 以下为真实 dmhy 样式中决定本问题成因的关键规则（摘自线上样式表）↓↓↓ */
+  table.tablesorter { background-color: #fff; table-layout: fixed; border-spacing: 1px; width: 100%; }
+  td { padding: 5px; line-height: 170%; text-align: center; overflow: hidden; word-break: break-all; }
+  th { background-color: #7e99be; padding: 5px; color: #fff; word-break: break-all; }
+  td.title { text-align: left; }
+  .download-arrow { font-size: 9px; padding-left: 11px; margin: 3px; }
+  .arrow-magnet { background: #cfd8e3; } /* 代替真实精灵图 icons.gif 的占位底色 */
 </style>
 </head>
 <body>
   <div class="tip">
-    <b>Mock 动漫花园列表页</b>（与真实 dmhy 的 <code>#topic_list</code> 结构一致，仅用于离线联调）<br>
+    <b>Mock 动漫花园列表页</b>（与真实 dmhy 的 <code>#topic_list</code> 结构同构，仅用于离线联调）<br>
     1. 启动 Mock MCP：<code>node tools/mock-mcp-server.mjs</code>（默认 8787 端口）<br>
     2. 在本页打开脚本菜单 →「设置 MCP Endpoint」→ 填 <code>http://127.0.0.1:8787/api/v1/mcp</code><br>
-    3. 点击任意「纸鸢转存」按钮 → 按提示填写 MCP Token（Mock 环境填任意非空值即可），Token 只保存在本机<br>
-    4. 观察按钮状态与右下角提示
+    3. 点击任意「纸鸢」按钮 → 按提示填写 MCP Token（Mock 环境填任意非空值即可），Token 只保存在本机；点「复制」可把该行磁力写入剪贴板（无需 Token）<br>
+    4. 观察按钮状态与右下角提示，并确认「磁鏈」列里的磁力 / 迅雷 / PikPak 三个原有按钮未被挤出或裁切
   </div>
 
-  <table id="topic_list" class="topic_list">
+  <table style="width:100%;" class="tablesorter" id="topic_list" cellpadding="0" cellspacing="1" border="0" width="" frame="void">
     <thead>
-      <tr><th>分类</th><th>标题</th><th>下载</th></tr>
+      <tr>
+        <th width="96"><span class="title">張貼日期</span></th>
+        <th width="5%"><span class="title">分類</span></th>
+        <th><span class="title">標題</span></th>
+        <th width="10%" nowrap="nowrap"><span class="title">磁鏈</span></th>
+        <th width="7%"><span class="title">大小</span></th>
+        <th width="5%"><span class="title">種子</span></th>
+        <th width="5%"><span class="title">下載</span></th>
+        <th width="5%"><span class="title">完成</span></th>
+        <th width="9%"><span class="title">發佈人</span></th>
+      </tr>
     </thead>
     <tbody>
-      <tr>
-        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
-        <td class="title"><a href="/topics/view/900001_porco-rosso.html">[红猪] Porco Rosso [BDRip 1080p HEVC]</a></td>
-        <td class="action">
-          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:1111111111111111111111111111111111111111&amp;dn=Porco%20Rosso" title="磁力链接">磁力</a>
-          <a class="download-arrow arrow-down" href="/topics/download/900001" title="下载种子">种子</a>
+      <tr class="">
+        <td width="98">今天 19:24</td>
+        <td width="6%" align="center"><a class="sort-4" href="/topics/list/sort_id/4"><font color=purple>動畫</font></a></td>
+        <td class="title">
+          <span class="tag"><a href="/topics/list/team_id/550">萝莉社活动室</a></span>
+          <a href="/topics/view/900001_porco-rosso.html" target="_blank">[红猪] Porco Rosso [BDRip 1080p HEVC]</a>
         </td>
+        <td nowrap="nowrap" align="center">
+          <a class="download-arrow arrow-magnet" title="磁力下載" href="magnet:?xt=urn:btih:1111111111111111111111111111111111111111&amp;dn=Porco%20Rosso">&nbsp;</a>
+          <a class="download-xl" title="迅雷下載" href="javascript:void(0);" data-magnet="magnet:?xt=urn:btih:1111111111111111111111111111111111111111"><img src="xl1.png" alt="迅雷下載" style="height:20px;width:82px;vertical-align:middle;"></a>
+          <a class="download-pp" target="_blank" title="保存后可以用手機隨時觀賞" href="https://keepshare.org/mock/1" style="display:inline-block;width:80px;height:20px;">&nbsp;</a>
+        </td>
+        <td nowrap="nowrap" align="center">2.0GB</td>
+        <td nowrap="nowrap" align="center"><span class="btl_1">-</span></td>
+        <td nowrap="nowrap" align="center"><span class="bts_1">-</span></td>
+        <td nowrap="nowrap" align="center">-</td>
+        <td align="center"><a href="/topics/list/user_id/556597">恋之星第六季</a></td>
       </tr>
-      <tr>
-        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
-        <td class="title"><a href="/topics/view/900002_porco-rosso.html">[红猪] Porco Rosso [1080p][简繁外挂]</a></td>
-        <td class="action">
-          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:2222222222222222222222222222222222222222&amp;dn=Porco%20Rosso%20CHT" title="磁力链接">磁力</a>
-          <a class="download-arrow arrow-down" href="/topics/download/900002" title="下载种子">种子</a>
+
+      <tr class="">
+        <td width="98">今天 18:02</td>
+        <td width="6%" align="center"><a class="sort-4" href="/topics/list/sort_id/4"><font color=purple>動畫</font></a></td>
+        <td class="title">
+          <span class="tag"><a href="/topics/list/team_id/550">萝莉社活动室</a></span>
+          <a href="/topics/view/900002_porco-rosso.html" target="_blank">[红猪] Porco Rosso [1080p][简繁外挂]</a>
         </td>
+        <td nowrap="nowrap" align="center">
+          <a class="download-arrow arrow-magnet" title="磁力下載" href="magnet:?xt=urn:btih:2222222222222222222222222222222222222222&amp;dn=Porco%20Rosso%20CHT">&nbsp;</a>
+          <a class="download-xl" title="迅雷下載" href="javascript:void(0);" data-magnet="magnet:?xt=urn:btih:2222222222222222222222222222222222222222"><img src="xl1.png" alt="迅雷下載" style="height:20px;width:82px;vertical-align:middle;"></a>
+          <a class="download-pp" target="_blank" title="保存后可以用手機隨時觀賞" href="https://keepshare.org/mock/2" style="display:inline-block;width:80px;height:20px;">&nbsp;</a>
+        </td>
+        <td nowrap="nowrap" align="center">1.4GB</td>
+        <td nowrap="nowrap" align="center"><span class="btl_1">-</span></td>
+        <td nowrap="nowrap" align="center"><span class="bts_1">-</span></td>
+        <td nowrap="nowrap" align="center">-</td>
+        <td align="center"><a href="/topics/list/user_id/556597">恋之星第六季</a></td>
       </tr>
-      <tr>
-        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
-        <td class="title"><a href="/topics/view/900003_porco-rosso.html">[红猪] Porco Rosso [720p][仅种子无磁力]</a></td>
-        <td class="action">
-          <a class="download-arrow arrow-down" href="/topics/download/900003" title="下载种子">种子</a>
+
+      <!-- 第 3 行：无磁力（「磁鏈」列不含任何磁力链接），用于测试回退详情页解析 -->
+      <tr class="">
+        <td width="98">今天 17:40</td>
+        <td width="6%" align="center"><a class="sort-4" href="/topics/list/sort_id/4"><font color=purple>動畫</font></a></td>
+        <td class="title">
+          <span class="tag"><a href="/topics/list/team_id/550">萝莉社活动室</a></span>
+          <a href="/topics/view/900003_porco-rosso.html" target="_blank">[红猪] Porco Rosso [720p][仅种子无磁力]</a>
         </td>
+        <td nowrap="nowrap" align="center"></td>
+        <td nowrap="nowrap" align="center">700MB</td>
+        <td nowrap="nowrap" align="center"><span class="btl_1">-</span></td>
+        <td nowrap="nowrap" align="center"><span class="bts_1">-</span></td>
+        <td nowrap="nowrap" align="center">-</td>
+        <td align="center"><a href="/topics/list/user_id/556597">恋之星第六季</a></td>
       </tr>
-      <tr>
-        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
-        <td class="title"><a href="/topics/view/900004_porco-rosso.html">[红猪] Porco Rosso [BDRip 2160p]</a></td>
-        <td class="action">
-          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:4444444444444444444444444444444444444444&amp;dn=Porco%20Rosso%204K" title="磁力链接">磁力</a>
+
+      <tr class="">
+        <td width="98">今天 16:11</td>
+        <td width="6%" align="center"><a class="sort-4" href="/topics/list/sort_id/4"><font color=purple>動畫</font></a></td>
+        <td class="title">
+          <span class="tag"><a href="/topics/list/team_id/550">萝莉社活动室</a></span>
+          <a href="/topics/view/900004_porco-rosso.html" target="_blank">[红猪] Porco Rosso [BDRip 2160p]</a>
         </td>
+        <td nowrap="nowrap" align="center">
+          <a class="download-arrow arrow-magnet" title="磁力下載" href="magnet:?xt=urn:btih:4444444444444444444444444444444444444444&amp;dn=Porco%20Rosso%204K">&nbsp;</a>
+          <a class="download-xl" title="迅雷下載" href="javascript:void(0);" data-magnet="magnet:?xt=urn:btih:4444444444444444444444444444444444444444"><img src="xl1.png" alt="迅雷下載" style="height:20px;width:82px;vertical-align:middle;"></a>
+          <a class="download-pp" target="_blank" title="保存后可以用手機隨時觀賞" href="https://keepshare.org/mock/4" style="display:inline-block;width:80px;height:20px;">&nbsp;</a>
+        </td>
+        <td nowrap="nowrap" align="center">8.1GB</td>
+        <td nowrap="nowrap" align="center"><span class="btl_1">-</span></td>
+        <td nowrap="nowrap" align="center"><span class="bts_1">-</span></td>
+        <td nowrap="nowrap" align="center">-</td>
+        <td align="center"><a href="/topics/list/user_id/556597">恋之星第六季</a></td>
       </tr>
-      <tr>
-        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
-        <td class="title"><a href="/topics/view/900005_porco-rosso.html">[红猪] Porco Rosso [与第 1 行相同磁力，用于测试重复转存]</a></td>
-        <td class="action">
-          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:1111111111111111111111111111111111111111&amp;dn=Porco%20Rosso%20dup" title="磁力链接">磁力</a>
+
+      <tr class="">
+        <td width="98">今天 15:33</td>
+        <td width="6%" align="center"><a class="sort-4" href="/topics/list/sort_id/4"><font color=purple>動畫</font></a></td>
+        <td class="title">
+          <span class="tag"><a href="/topics/list/team_id/550">萝莉社活动室</a></span>
+          <a href="/topics/view/900005_porco-rosso.html" target="_blank">[红猪] Porco Rosso [与第 1 行相同磁力，用于测试重复转存]</a>
         </td>
+        <td nowrap="nowrap" align="center">
+          <a class="download-arrow arrow-magnet" title="磁力下載" href="magnet:?xt=urn:btih:1111111111111111111111111111111111111111&amp;dn=Porco%20Rosso%20dup">&nbsp;</a>
+          <a class="download-xl" title="迅雷下載" href="javascript:void(0);" data-magnet="magnet:?xt=urn:btih:1111111111111111111111111111111111111111"><img src="xl1.png" alt="迅雷下載" style="height:20px;width:82px;vertical-align:middle;"></a>
+          <a class="download-pp" target="_blank" title="保存后可以用手機隨時觀賞" href="https://keepshare.org/mock/5" style="display:inline-block;width:80px;height:20px;">&nbsp;</a>
+        </td>
+        <td nowrap="nowrap" align="center">2.0GB</td>
+        <td nowrap="nowrap" align="center"><span class="btl_1">-</span></td>
+        <td nowrap="nowrap" align="center"><span class="bts_1">-</span></td>
+        <td nowrap="nowrap" align="center">-</td>
+        <td align="center"><a href="/topics/list/user_id/556597">恋之星第六季</a></td>
       </tr>
-      <tr>
-        <td class="category"><a href="/topics/list/sort_id/2">动画</a></td>
-        <td class="title"><a href="/topics/view/313647_1080P_BD-MKV.html">[Kamigami] 红猪 / Kurenai no Buta [BD 1080p]（Base32 磁力 + 长 tracker 列表）</a></td>
-        <td class="action">
-          <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:IBDFG6XQ35NHBMXXU46LB2RHATX6ZUVO&amp;dn=%5BKamigami%5D+Kurenai+no+Buta+Porco+Rosso+1992+%5BBD+x264+1920_1080%5D.mkv&amp;tr=http%3A%2F%2F208.67.16.113%3A8000%2Fannounce&amp;tr=udp%3A%2F%2F208.67.16.113%3A8000%2Fannounce&amp;tr=http%3A%2F%2Ftracker.openbittorrent.com%3A80%2Fannounce&amp;tr=http%3A%2F%2Ftracker.ktxp.com%3A6868%2Fannounce" title="磁力链接">磁力</a>
-          <a class="download-arrow arrow-down" href="/topics/download/313647" title="下载种子">种子</a>
+
+      <tr class="">
+        <td width="98">今天 12:07</td>
+        <td width="6%" align="center"><a class="sort-4" href="/topics/list/sort_id/4"><font color=purple>動畫</font></a></td>
+        <td class="title">
+          <span class="tag"><a href="/topics/list/team_id/550">Kamigami</a></span>
+          <a href="/topics/view/313647_1080P_BD-MKV.html" target="_blank">[Kamigami] 红猪 / Kurenai no Buta [BD 1080p]（Base32 磁力 + 长 tracker 列表）</a>
         </td>
+        <td nowrap="nowrap" align="center">
+          <a class="download-arrow arrow-magnet" title="磁力下載" href="magnet:?xt=urn:btih:IBDFG6XQ35NHBMXXU46LB2RHATX6ZUVO&amp;dn=%5BKamigami%5D+Kurenai+no+Buta+Porco+Rosso+1992+%5BBD+x264+1920_1080%5D.mkv&amp;tr=http%3A%2F%2F208.67.16.113%3A8000%2Fannounce&amp;tr=udp%3A%2F%2F208.67.16.113%3A8000%2Fannounce&amp;tr=http%3A%2F%2Ftracker.openbittorrent.com%3A80%2Fannounce&amp;tr=http%3A%2F%2Ftracker.ktxp.com%3A6868%2Fannounce">&nbsp;</a>
+          <a class="download-xl" title="迅雷下載" href="javascript:void(0);" data-magnet="magnet:?xt=urn:btih:4046537af0df5a70b2f7a73cb0ea2704efecd2ae"><img src="xl1.png" alt="迅雷下載" style="height:20px;width:82px;vertical-align:middle;"></a>
+          <a class="download-pp" target="_blank" title="保存后可以用手機隨時觀賞" href="https://keepshare.org/mock/6" style="display:inline-block;width:80px;height:20px;">&nbsp;</a>
+        </td>
+        <td nowrap="nowrap" align="center">1.6GB</td>
+        <td nowrap="nowrap" align="center"><span class="btl_1">-</span></td>
+        <td nowrap="nowrap" align="center"><span class="bts_1">-</span></td>
+        <td nowrap="nowrap" align="center">-</td>
+        <td align="center"><a href="/topics/list/user_id/556597">Kamigami</a></td>
       </tr>
     </tbody>
   </table>

@@ -76,7 +76,7 @@ async function fetchTasks(port, token, mode = 'normal') {
   return res?.result?.structuredContent?.items || [];
 }
 
-async function createHarness({ mode, port, token = 'test-token', gm4 = false, extraStore = {} }) {
+async function createHarness({ mode, port, token = 'test-token', gm4 = false, extraStore = {}, clipboardApi = 'gm3' }) {
   const child = await startMockServer(mode, port);
   const store = new Map([
     ['ky_mcp_endpoint', `http://127.0.0.1:${port}/api/v1/mcp`],
@@ -93,6 +93,7 @@ async function createHarness({ mode, port, token = 'test-token', gm4 = false, ex
   });
   const { window } = dom;
   const counters = { detailFetches: 0, totalRequests: 0 };
+  const clipboard = [];
 
   window.GM_getValue = (key, fallback) => (store.has(key) ? store.get(key) : fallback);
   window.GM_setValue = (key, value) => store.set(key, value);
@@ -130,6 +131,15 @@ async function createHarness({ mode, port, token = 'test-token', gm4 = false, ex
     };
   }
 
+  // 剪贴板 API 形态：gm3 = GM_setClipboard；gm4 = GM.setClipboard（返回 Promise）；
+  // none = 两者都不提供，用于验证回退到 Web API 及最终的失败提示
+  const recordClipboard = (text) => { clipboard.push(String(text)); };
+  if (clipboardApi === 'gm3') {
+    window.GM_setClipboard = recordClipboard;
+  } else if (clipboardApi === 'gm4') {
+    window.GM = Object.assign(window.GM || {}, { setClipboard: async (text) => recordClipboard(text) });
+  }
+
   window.eval(SCRIPT_CODE);
   await sleep(120);
 
@@ -137,6 +147,7 @@ async function createHarness({ mode, port, token = 'test-token', gm4 = false, ex
     dom,
     window,
     counters,
+    clipboard,
     store,
     close: () => child.kill(),
   };
@@ -148,12 +159,41 @@ async function scenarioHappyPath() {
   try {
     const buttons = [...window.document.querySelectorAll('.ky-import-btn')];
     check('normal: 注入按钮数量为 6（含无磁力行、重复磁力行与 Base32 磁力行）', buttons.length === 6, `实际 ${buttons.length}`);
+
+    // 回归守卫：真实 dmhy 的「磁鏈」列宽由表头 width="10%" + table-layout:fixed 固定，
+    // 且该列 nowrap / overflow:hidden，原有磁力 / 迅雷 / PikPak 三个按钮已占满列宽。
+    // 按钮一旦插进该列就会溢出并把排在末尾的原按钮挤出可视区，因此必须挂在标题列。
     check(
-      'normal: 第 1 行按钮紧跟在磁力链接之后',
+      'normal: 按钮挂在标题列（td.title）末尾',
       (() => {
         const row = window.document.querySelectorAll('#topic_list tbody tr')[0];
-        const magnet = row.querySelector('a.arrow-magnet');
-        return magnet.nextElementSibling?.classList.contains('ky-import-btn');
+        const group = row.querySelector('.ky-btn-group');
+        return Boolean(group) && group.parentElement === row.querySelector('td.title');
+      })()
+    );
+    check(
+      'normal: 「磁鏈」列原有元素未被改动或插入',
+      (() => {
+        const rows = [...window.document.querySelectorAll('#topic_list tbody tr')];
+        return rows.every((row) => {
+          const magnetCell = row.querySelector('a.arrow-magnet')?.closest('td')
+            || [...row.children].find((td) => td.querySelector('.download-xl'));
+          if (!magnetCell) return true;
+          const hasOurButton = magnetCell.querySelector('.ky-import-btn, .ky-copy-btn, .ky-btn-group');
+          const originalAnchors = magnetCell.querySelectorAll('a').length;
+          return !hasOurButton && originalAnchors === 3;
+        });
+      })()
+    );
+    check(
+      'normal: 转存按钮与复制按钮同处一个按钮组',
+      (() => {
+        const row = window.document.querySelectorAll('#topic_list tbody tr')[0];
+        const group = row.querySelector('.ky-btn-group');
+        const kids = group ? [...group.children] : [];
+        return kids.length === 2
+          && kids[0].classList.contains('ky-import-btn')
+          && kids[1].classList.contains('ky-copy-btn');
       })()
     );
 
@@ -430,6 +470,108 @@ async function scenarioHashLengthError() {
   }
 }
 
+/**
+ * 复制按钮：不依赖 MCP 配置（token 置空），点击即把规范化后的磁力写入剪贴板。
+ * 用「无 Token」环境运行，可同时验证复制不会触发任何转存任务。
+ */
+async function scenarioCopyMagnet() {
+  const harness = await createHarness({ mode: 'normal', port: 8801, token: null });
+  const { window, clipboard } = harness;
+  try {
+    const importButtons = [...window.document.querySelectorAll('.ky-import-btn')];
+    const copyButtons = [...window.document.querySelectorAll('.ky-copy-btn')];
+
+    check('copy: 转存按钮初始文案为「纸鸢」', importButtons.length === 6 && importButtons.every((b) => b.textContent === '纸鸢'), importButtons[0]?.textContent);
+    check('copy: 每行转存按钮后都跟一个复制按钮', copyButtons.length === importButtons.length, `转存 ${importButtons.length} / 复制 ${copyButtons.length}`);
+    check(
+      'copy: 复制按钮紧跟在转存按钮之后',
+      importButtons.length > 0 && importButtons.every((btn, i) => btn.nextElementSibling === copyButtons[i])
+    );
+    check('copy: 复制按钮初始文案为「复制」', copyButtons[0]?.textContent === '复制', copyButtons[0]?.textContent);
+
+    // 第 1 行：行内磁力 → 直接复制规范化后的磁力
+    copyButtons[0].click();
+    const okFirst = await waitFor(() => clipboard.length === 1);
+    check('copy: 行内磁力可直接复制', okFirst, JSON.stringify(clipboard));
+    check(
+      'copy: 复制内容为规范化磁力（40 位 hex + dn）',
+      clipboard[0] === 'magnet:?xt=urn:btih:1111111111111111111111111111111111111111&dn=Porco%20Rosso',
+      clipboard[0]
+    );
+    // 文案切换在 copyText 的 await 之后，轮询等待而非依赖微任务时序
+    const doneShown = await waitFor(() => copyButtons[0].textContent === '已复制', 1000);
+    check('copy: 复制成功后按钮短暂显示「已复制」', doneShown, copyButtons[0].textContent);
+    check('copy: 复制不会改变转存按钮状态', importButtons[0].dataset.state === 'idle', importButtons[0].dataset.state);
+
+    // 第 3 行：无行内磁力 → 回退详情页解析后复制
+    copyButtons[2].click();
+    const okThird = await waitFor(() => clipboard.length === 2);
+    check('copy: 无磁力行回退详情页解析后复制', okThird, JSON.stringify(clipboard));
+    check(
+      'copy: 详情页磁力被复制',
+      clipboard[1] === 'magnet:?xt=urn:btih:3333333333333333333333333333333333333333&dn=Porco%20from%20detail',
+      clipboard[1]
+    );
+
+    // 第 6 行：Base32 磁力 → 复制为 40 位 hex
+    copyButtons[5].click();
+    await waitFor(() => clipboard.length === 3);
+    check(
+      'copy: Base32 磁力复制为 40 位 hex',
+      Boolean(clipboard[2]) && clipboard[2].startsWith('magnet:?xt=urn:btih:4046537af0df5a70b2f7a73cb0ea2704efecd2ae&dn='),
+      clipboard[2]
+    );
+
+    const reset = await waitFor(() => copyButtons[0].textContent === '复制', 3000);
+    check('copy: 状态自动复位为「复制」', reset, copyButtons[0].textContent);
+
+    const tasks = await fetchTasks(8801, 'test-token');
+    check('copy: 复制不会向纸鸢提交任何转存任务', tasks.length === 0, `任务数 ${tasks.length}`);
+  } finally {
+    harness.close();
+  }
+}
+
+/**
+ * 剪贴板 API 兼容性：GM4 风格的 GM.setClipboard，以及两者都缺失时的降级失败提示。
+ * jsdom 中 navigator.clipboard 与 document.execCommand 均不存在，因此 clipboardApi='none'
+ * 会真实走完三级降级并落到失败分支。
+ */
+async function scenarioCopyClipboardFallback() {
+  const gm4Harness = await createHarness({ mode: 'normal', port: 8802, token: null, clipboardApi: 'gm4' });
+  try {
+    const { window, clipboard } = gm4Harness;
+    const copyButton = window.document.querySelector('.ky-copy-btn');
+    copyButton.click();
+    const ok = await waitFor(() => clipboard.length === 1);
+    check('copy-gm4: 仅提供 GM.setClipboard 时也能复制', ok, JSON.stringify(clipboard));
+    check(
+      'copy-gm4: 复制内容正确',
+      clipboard[0] === 'magnet:?xt=urn:btih:1111111111111111111111111111111111111111&dn=Porco%20Rosso',
+      clipboard[0]
+    );
+  } finally {
+    gm4Harness.close();
+  }
+
+  const noneHarness = await createHarness({ mode: 'normal', port: 8803, token: null, clipboardApi: 'none' });
+  try {
+    const { window, clipboard } = noneHarness;
+    const copyButton = window.document.querySelector('.ky-copy-btn');
+    copyButton.click();
+    const failed = await waitFor(() => copyButton.dataset.state === 'error');
+    check('copy-fallback: 无可用剪贴板 API 时按钮进入失败态', failed, `state=${copyButton.dataset.state}`);
+    check('copy-fallback: 失败态文案为「重试」', copyButton.textContent === '重试', copyButton.textContent);
+    check('copy-fallback: 未写入任何内容', clipboard.length === 0, JSON.stringify(clipboard));
+    const toastText = window.document.getElementById('ky-toast-host')?.textContent || '';
+    check('copy-fallback: 提示用户手动复制', /手动/.test(toastText), toastText.slice(-120));
+    const reset = await waitFor(() => copyButton.dataset.state === 'idle', 4000);
+    check('copy-fallback: 失败后仍会复位为「复制」', reset, copyButton.textContent);
+  } finally {
+    noneHarness.close();
+  }
+}
+
 async function main() {
   await scenarioHappyPath();
   await scenarioSse();
@@ -444,6 +586,8 @@ async function main() {
   await scenarioBase32Hash();
   await scenarioKeepTrackers();
   await scenarioHashLengthError();
+  await scenarioCopyMagnet();
+  await scenarioCopyClipboardFallback();
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n共 ${results.length} 项断言，失败 ${failed.length} 项`);

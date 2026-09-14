@@ -3,7 +3,7 @@
 // @name:zh-CN   动漫花园 → 纸鸢网盘 一键转存
 // @namespace    https://github.com/Elongou44/dmhy-kiteyuan-importer
 // @version      1.0.0
-// @description  在动漫花园(dmhy)资源列表的每条资源旁添加「纸鸢转存」按钮，点击即通过 MCP 将磁力链接转存到纸鸢网盘（Token 在本机配置，不写入脚本）
+// @description  在动漫花园(dmhy)资源列表的每条资源旁添加「纸鸢」转存与「复制」磁力按钮，点击即通过 MCP 将磁力链接转存到纸鸢网盘（Token 在本机配置，不写入脚本）
 // @author       Elongou44
 // @license      MIT
 // @match        https://share.dmhy.org/topics/list*
@@ -13,6 +13,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
 // @connect      mybt.kiteyuan.info
 // @connect      share.dmhy.org
 // @connect      127.0.0.1
@@ -62,6 +63,8 @@
   const TOOL_ADD_MAGNET = 'magnet_task_add';
   const LOG_PREFIX = '[dmhy→纸鸢]';
   const BTN_CLASS = 'ky-import-btn';
+  const COPY_BTN_CLASS = 'ky-copy-btn';
+  const BTN_GROUP_CLASS = 'ky-btn-group';
 
   /** 读取配置：优先脚本管理器的 GM 存储，若管理器未注入同步 API 则回退 localStorage */
   function gmGetValue(key, fallback) {
@@ -455,17 +458,26 @@
    * ------------------------------------------------------------------ */
 
   const BTN_STYLE = `
-.${BTN_CLASS} {
+.${BTN_GROUP_CLASS} {
   display: inline-flex;
   align-items: center;
-  margin: 0 0 0 6px;
+  gap: 6px;
+  margin-left: 6px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.${BTN_CLASS},
+.${COPY_BTN_CLASS} {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 0;
   padding: 1px 8px;
   font-size: 12px;
   line-height: 18px;
   font-family: inherit;
   color: #fff !important;
-  background: #3d8fd9;
-  border: 1px solid #2f7fd1;
   border-radius: 3px;
   cursor: pointer;
   vertical-align: middle;
@@ -473,19 +485,44 @@
   white-space: nowrap;
   transition: background-color .15s ease;
 }
+.${BTN_CLASS} {
+  /* 固定最小宽度：转存各状态文案长度不同，避免切换时按钮与相邻复制按钮跳动 */
+  min-width: 64px;
+  background: #3d8fd9;
+  border: 1px solid #2f7fd1;
+}
 .${BTN_CLASS}:hover { background: #2f7fd1; }
 .${BTN_CLASS}[data-state="loading"] { background: #8a94a0; border-color: #7d8894; cursor: progress; }
 .${BTN_CLASS}[data-state="success"] { background: #3f9c66; border-color: #35875a; cursor: default; }
 .${BTN_CLASS}[data-state="error"] { background: #d9534f; border-color: #c9433f; }
 .${BTN_CLASS}[data-state="error"]:hover { background: #c9433f; }
+.${COPY_BTN_CLASS} {
+  min-width: 52px;
+  background: #6c757d;
+  border: 1px solid #5f676e;
+}
+.${COPY_BTN_CLASS}:hover { background: #5f676e; }
+.${COPY_BTN_CLASS}[data-state="loading"] { background: #8a94a0; border-color: #7d8894; cursor: progress; }
+.${COPY_BTN_CLASS}[data-state="done"] { background: #3f9c66; border-color: #35875a; }
+.${COPY_BTN_CLASS}[data-state="error"] { background: #d9534f; border-color: #c9433f; }
+.${COPY_BTN_CLASS}[data-state="error"]:hover { background: #c9433f; }
 `;
 
   const BTN_TEXT = {
-    idle: '纸鸢转存',
+    idle: '纸鸢',
     loading: '转存中…',
     success: '已转存',
     error: '重试转存',
   };
+
+  const COPY_BTN_TEXT = {
+    idle: '复制',
+    loading: '读取中',
+    done: '已复制',
+    error: '重试',
+  };
+
+  const COPY_BTN_TITLE = '复制该资源的磁力链接';
 
   function injectStyle() {
     if (document.getElementById('ky-import-style')) return;
@@ -500,6 +537,72 @@
     button.textContent = BTN_TEXT[state] || BTN_TEXT.idle;
     button.disabled = state === 'loading';
     if (title) button.title = title;
+  }
+
+  function setCopyButtonState(button, state, title = COPY_BTN_TITLE) {
+    button.dataset.state = state;
+    button.textContent = COPY_BTN_TEXT[state] || COPY_BTN_TEXT.idle;
+    button.disabled = state === 'loading';
+    button.title = title;
+  }
+
+  /**
+   * 写入剪贴板，兼容脚本猫 / Tampermonkey 的 GM_setClipboard 与 GM4 风格的 GM.setClipboard。
+   * 返回 true 表示已由 GM API 完成写入，false 表示当前管理器未提供剪贴板 API。
+   */
+  async function gmSetClipboard(text) {
+    if (typeof GM_setClipboard === 'function') {
+      GM_setClipboard(text, 'text');
+      return true;
+    }
+    if (typeof GM !== 'undefined' && GM && typeof GM.setClipboard === 'function') {
+      // GM4 规范下可能返回 Promise，统一 await 以兼容两种实现
+      await GM.setClipboard(text, 'text');
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 复制文本到剪贴板，返回是否成功。
+   * 依次尝试：GM 剪贴板 API（不受用户手势/异步链限制）
+   * → navigator.clipboard（需安全上下文且页面聚焦）
+   * → 临时 textarea + execCommand（老浏览器兜底）。
+   */
+  async function copyText(text) {
+    const value = String(text || '');
+    if (!value) return false;
+
+    try {
+      if (await gmSetClipboard(value)) return true;
+    } catch (err) {
+      warn('GM 剪贴板 API 复制失败，改试 Web API', err);
+    }
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch (err) {
+      warn('navigator.clipboard 复制失败，改试 execCommand', err);
+    }
+
+    try {
+      const area = document.createElement('textarea');
+      area.value = value;
+      area.setAttribute('readonly', '');
+      area.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0;';
+      (document.body || document.documentElement).appendChild(area);
+      area.select();
+      area.setSelectionRange(0, area.value.length);
+      const ok = document.execCommand('copy');
+      area.remove();
+      return ok;
+    } catch (err) {
+      warn('execCommand 复制失败', err);
+      return false;
+    }
   }
 
   function decodeEntities(text) {
@@ -832,7 +935,29 @@
     }
   }
 
-  function makeButton(row, anchor) {
+  /**
+   * 按钮挂载点。
+   *
+   * 关键：不要把按钮放进「磁鏈」列。真实 dmhy 该列宽由表头 width="10%" 固定，
+   * 配合 table.tablesorter{table-layout:fixed} 与 td{overflow:hidden}，列宽完全不受
+   * 内容影响，且该列是 nowrap。而它原有的磁力 / 迅雷 / PikPak 三个按钮已几乎占满列宽
+   * （实测 1920 视口：列宽 194px、内容 194px，零余量）。文本按钮塞进去会溢出并被裁切，
+   * 把排在末尾的迅雷 / PikPak 按钮挤出可视区。
+   *
+   * 标题列（td.title）是唯一既宽又允许换行（word-break:break-all，非 nowrap）的列，
+   * 因此按钮统一挂在标题列末尾，换行时只增加行高，不会挤掉任何原有元素。
+   */
+  function buttonHostFromRow(row) {
+    const titleCell = row.querySelector('td.title');
+    if (titleCell) return titleCell;
+    // 降级：没有标题列时，退回磁力图标所在单元格
+    const anchor = row.querySelector(MAGNET_ANCHOR_SELECTOR);
+    if (anchor && anchor.parentElement) return anchor.parentElement;
+    const cells = row.querySelectorAll('td');
+    return cells.length ? cells[cells.length - 1] : row;
+  }
+
+  function makeButton(row) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = BTN_CLASS;
@@ -852,15 +977,76 @@
       await runImport({ button, row, cache: cachedMagnet, allowTokenPrompt: true });
     });
 
-    if (anchor) {
-      anchor.insertAdjacentElement('afterend', button);
-    } else {
-      // 没有磁力图标时，挂到该行最后一个单元格末尾
-      const cells = row.querySelectorAll('td');
-      const host = cells.length ? cells[cells.length - 1] : row;
-      host.appendChild(document.createTextNode(' '));
-      host.appendChild(button);
-    }
+    // 复制按钮复用同一个磁力缓存：转存解析过的磁力，复制时不再重复请求
+    const copyButton = makeCopyButton(row, cachedMagnet);
+
+    // 两按钮包在同一个 inline-flex 组里，保证它们作为整体换行、不会被拆到两行
+    const group = document.createElement('span');
+    group.className = BTN_GROUP_CLASS;
+    group.appendChild(button);
+    group.appendChild(copyButton);
+    buttonHostFromRow(row).appendChild(group);
+
+    return button;
+  }
+
+  /** 复制按钮：把该行的磁力链接（规范化后的 40 位 hex 形式）写入剪贴板 */
+  function makeCopyButton(row, cache) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = COPY_BTN_CLASS;
+    button.dataset.state = 'idle';
+    button.textContent = COPY_BTN_TEXT.idle;
+    button.title = COPY_BTN_TITLE;
+
+    let resetTimer = 0;
+    const resetLater = (delay) => {
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => setCopyButtonState(button, 'idle'), delay);
+    };
+
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (button.dataset.state === 'loading') return;
+      clearTimeout(resetTimer);
+
+      let magnet = cache.value || magnetFromRow(row);
+      if (!magnet) {
+        const detailUrl = detailUrlFromRow(row);
+        if (!detailUrl) {
+          setCopyButtonState(button, 'error', '这一行没有找到磁力链接');
+          toast('error', '这一行没有找到磁力链接');
+          resetLater(2500);
+          return;
+        }
+        // 行内无磁力：与转存按钮一致，回退到详情页解析
+        setCopyButtonState(button, 'loading', '正在从详情页解析磁力链接…');
+        try {
+          magnet = await fetchMagnetFromDetail(detailUrl);
+        } catch (err) {
+          setCopyButtonState(button, 'error', String((err && err.message) || err));
+          toast('error', `复制失败：${friendlyError(err)}`, 10000);
+          warn('复制磁力失败', err);
+          resetLater(2500);
+          return;
+        }
+      }
+      cache.value = magnet;
+
+      if (await copyText(magnet)) {
+        setCopyButtonState(button, 'done', '已复制磁力链接');
+        toast('info', '已复制磁力链接', 3000);
+        // 只记录 hash，不输出完整磁力与资源名，避免泄露浏览内容
+        log('已复制磁力链接', magnetHash(magnet));
+        resetLater(1500);
+      } else {
+        setCopyButtonState(button, 'error', '复制失败，请手动选择复制');
+        toast('error', '复制失败：浏览器拒绝了剪贴板写入，请手动选择复制', 10000);
+        resetLater(2500);
+      }
+    });
+
     return button;
   }
 
@@ -904,14 +1090,9 @@
   function decorateRow(row) {
     if (row.querySelector(`.${BTN_CLASS}`)) return;
 
-    const magnetAnchor = row.querySelector(MAGNET_ANCHOR_SELECTOR);
-    if (magnetAnchor) {
-      makeButton(row, magnetAnchor);
-      return;
-    }
-    // 降级：没有磁力图标的行，只要含详情页链接也提供按钮（点击时解析详情页）
-    if (detailUrlFromRow(row)) {
-      makeButton(row, null);
+    // 行内磁力优先；没有磁力图标时，只要含详情页链接也提供按钮（点击时解析详情页）
+    if (row.querySelector(MAGNET_ANCHOR_SELECTOR) || detailUrlFromRow(row)) {
+      makeButton(row);
     }
   }
 
@@ -989,7 +1170,7 @@
     if (!config.token) {
       toast(
         'info',
-        '首次使用：点击任意「纸鸢转存」按钮会弹出设置面板，填入 MCP Token 即可；\n也可以用脚本菜单「脚本设置」。Token 只保存在本机存储中。',
+        '首次使用：点击任意「纸鸢」按钮会弹出设置面板，填入 MCP Token 即可；\n也可以用脚本菜单「脚本设置」。Token 只保存在本机存储中。\n「复制」按钮把该行磁力写入剪贴板，不需要 Token。',
         15000
       );
     }
